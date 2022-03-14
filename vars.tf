@@ -8,7 +8,7 @@ variable "access_key" {
 	default = "AKIASYNXNQWQQ2ELL6H7"
 }
 variable "secret_key" {
-	default = "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"
+	default = "JzX74X7CUgYY3w9IczOJhf/MZFHO19QQt2/TM9/"
 }
 
 variable "vpc_cidr" {
