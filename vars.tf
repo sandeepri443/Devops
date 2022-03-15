@@ -5,10 +5,10 @@ variable "region" {
 }
 
 variable "access_key" {
-	default = "AKIASYNXNQWQQ2ELL6H7"
+	default = "AKIASYNXNQWQYAJD4YMM"
 }
 variable "secret_key" {
-	default = "JzX74X7CUgYY3w9IczOJhf/MZFHO19QQt2/TM9/"
+	default = "kKOnaYELdkdZY4kf52/t0p82Ee5EQarWMnh6vXbY"
 }
 
 variable "vpc_cidr" {
@@ -17,6 +17,30 @@ variable "vpc_cidr" {
 
 variable "subnet_cidr" {
   default = "10.10.1.0/24"
+}
+
+variable "vpcid" {
+    type = list
+    default = ["vpc-0e8cbc380c419187e"]
+
+  
+}
+
+
+output "vpcid" {
+    value = var.vpcid
+  
+}
+
+
+variable "ns_list" {
+  type = list
+
+  default = [
+    "ns-999.awsdns-59.net.",
+    "ns-999.awsdns-60.net"
+  ]
+  
 }
 
 
