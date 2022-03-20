@@ -1,0 +1,94 @@
+Use case:: `
+AWS Hardening Guidelines - 100's of AWS Account and provision resourses in different regions
+One IaaC tool for 100's of providers 
+********************************************************************************************************************************************************************
+Download for Windows
+https://www.terraform.io/downloads.html
+copy and paste the binary file in binaries folder and set the environment variable
+
+Download for Linux
+wget https://releases.hashicorp.com/terraform/1.1.0/terraform_1.1.0_linux_amd64.zip
+unzip <package>
+echo $PATH
+mv terraform /usr/local/bin
+
+********************************************************************************************************************************************************************
+Code 1 - Creating EC2 Instance:
+
+https://github.com/zealvora/terraform-beginner-to-advanced-resource/blob/master/Section%201%20-%20Deploying%20Infrastructure%20with%20Terraform/first-ec2.md
+
+terraform -version 
+terraform init          - start downloading the plugins associated with the provider (aws)
+terraform init -upgrade - download the latest plugin based on the constraints defined in the configuration (verion = "~> 3.0" ), and updates the .terraform.lock.hcl  
+terraform plan   - terraform plans to change  the current state infra resources to the desired state infra resources
+terraform plan -out=plan.out
+terraform show plan.out
+terraform show -json plan.out
+terraform show or terraform state list - it would simly show the state file
+terraform apply  - create the resource
+terraform apply -target <>.<>
+terraform apply -target aws_instance.myec2
+terraform apply -auto-approve
+terraform apply plan.out
+terraform validate - to check for syntax error
+
+
+terraform destroy                                          #wipe the resources in .tf,state file
+terraform destroy -target aws_instance.myec2
+terraform destroy -target github_repository.repo
+or
+comment the resource block /*........*/
+
+Desired State = Current State - Terraform plan  -> Infrastructure is up-to-date
+Desired State != Current State - Terraform plan -> Terraform would try to match the state to desired state.
+terraform refresh - fetches the current state information of the resources deployed, and also updates the state file 	
+terraform plan    - Terraform compares your real infrastructure against your configuration (interanlly terraform refresh happens) - at some times, resources would be replaced/recreated terraform finds any changes in real infra and terraform desired config - please read the plan and execute apply)
+terraform apply
+
+Note: Terraform's primary function is to create, modify, and destroy infrastructure resources to match the desired state desired state described in a Terraform configuration.
+      Thus specify all the things in terraform desired configuration .tf file. (Ex: change the security group)
+	  
+State file:
+- contains all the details/information infrastructure resources that are currently live
+
+Desired State and Current State  (Terraform tries to ensure that the deployed infrastructure is based on the desired state)	
+- former denoted the resources which we mention in our .tf file
+- latter denotes the infrastructure resource
+
+Understand the Resource Type and Local Resource Name
+	  
+********************************************************************************************************************************************************************
+
+GIT Provider and Resources:
+https://registry.terraform.io/providers/integrations/github/latest/docs
+GIT -> Settings -> Developer Settings -> Personal Access Tokens -> Generate Tokens
+Token: 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
+
+AWS Provider and Resources:
+https://registry.terraform.io/providers/hashicorp/aws/latest/docs
+Static Credentials : Not recommended though
+Access Key: AKIAUE2RPSJQK2YJEPSZ
+Secret Access key: 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
+
+********************************************************************************************************************************************************************
+
+Two Types of Providers:
+1. Hashicorp provided
+2. Hashicorp not-provided
+
+Provider versioning:
+- provider plugins are released separetely from Terraform itself
+- if version argument is not-provided, the most recent provider will be downloaded
+- verion = "~> 3.0"  any version in the range of 3.X range
+            >= 3.0   greater than or equal to the version
+            <= 3.0   less than or equal to the version
+            >= 3.0, <= 3.20	Any version between 3.0	and 3.20	
+- version information would be saved in .terraform.lock.hcl  (Dependency lock file allows us to lock to a specific version 	of the provider)	
+- Thus, we would not be able to change the version at any stage later
+- In order to change the version of the provider, simple delete the .terraform.lock.hcl and do terraform init		
+- you can override the behaviour by adding -upgrade flag (terraform init -upgrade) 
+	
+********************************************************************************************************************************************************************
+
+
+
