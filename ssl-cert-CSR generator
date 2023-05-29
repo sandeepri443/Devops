@@ -1,0 +1,30 @@
+####Create the Folder and create a file with san.cnf
+[ req ]
+distinguished_name = req_distinguished_name
+req_extensions = req_ext
+prompt = no
+
+[ req_distinguished_name ]
+C = US
+ST = Califonia
+L = Atlanta
+O = TEST LLP
+OU = TEST LIMITED emailAddress = INFRA@TEST.COM
+CN = *.Test.com
+
+[ req_ext ]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = *.Test.com
+DNS.2 = test.com
+
+############################################################
+Command:
+openssl req -out testcom.csr -newkey rsa:2048 -nodes -keyout private.key -config san.cnf
+
+Checklist:
+openssl s_client -servername test.com -connect test.com:443 2>/dev/null | openssl x509 -noout -dates
+
+haproxy:
+openssl x509 -text -noout -in /etc/ssl/private/services.pem
