@@ -1,0 +1,40 @@
+### cd .ssh
+vi test.pem
+
+vi test.pem
+cope the pem and save
+chmod 400 test.pem
+
+
+###login th ec2 instance:
+ssh ec2-user@1.1.1.1
+
+#################################
+cd .ssh
+vi config
+
+Host test-jumphost
+   Hostname 10.1.1.1
+   User 1234
+   IdentityFile ~/.ssh/id_rsa
+   IdentitiesOnly yes
+   ProxyCommand none
+   ForwardAgent yes
+   
+   
+ 
+
+Host Us-Jump-host
+   Hostname 10.8.8.8
+   User ubuntu
+   IdentityFile ~/.ssh/test.pem
+   ForwardAgent yes
+   ProxyCommand ssh -q -e none test-jumphost -W %h:%p
+   IdentitiesOnly yes
+   
+   
+   ##################################
+   
+   ssh connection validation
+   
+   ssh us-Jump-host
