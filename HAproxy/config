@@ -1,0 +1,64 @@
+#### cat /etc/ssl/haproxy-app-services.domain.io.pem
+private key
+appllcation cert
+intermeditae 
+root certicate
+
+systemctl haproxy restart
+
+# cat /etc/haproxy/haproxy.cfg
+global
+  log 127.0.0.1 local2 debug
+  tune.ssl.default-dh-param 1024
+  ssl-default-bind-options   no-sslv3 no-tls-tickets force-tlsv12
+  ssl-default-bind-ciphers   ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AESGCM:RSA+AES:RSA+3DES:!ANULL:!MD5:!DSS
+
+defaults
+  log global
+  option logasap
+  option tcplog
+  option http-server-close
+  option redispatch
+  option abortonclose
+  option log-health-checks
+
+  timeout connect 60000ms
+  timeout client 1200000ms
+  timeout server 1200000ms
+
+resolvers awsvpc
+  nameserver vpc 172.23.0.2:53
+
+fronetend http-in
+    bind *:80
+    mode  http
+    stats enable
+    stats refresh 30s
+    stats realm Strictly\ Private
+    stats auth admin:admin
+    stats uri /admin?stats
+
+
+frontend event_hub
+  mode tcp
+  bind *:443 ssl crt /etc/ssl/haproxy-app-services.domain.io.pem alpn h2,http/1.1
+  use_backend event_hub
+
+backend event_hub
+  mode tcp
+  balance leastconn
+  server eventhub  internal-euc01-pr-appservices-eh-elb-24524246266.eu-central-1.elb.amazonaws.com:443 check resolvers awsvpc
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
