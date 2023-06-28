@@ -1,0 +1,23 @@
+[http]
+postBuffer = 524288000
+sslVerify = false
+lowSpeedLimit = 1000
+[https]
+postBuffer = 524288000
+sslVerify = false
+lowSpeedLimit = 1000
+# # proxy = http://127.0.0.1:31116
+
+[user]
+name = Sandeep Domain
+email = XXXXXXX
+[user]
+email = XXXXXXX
+name = empid
+[credentails]
+helper = store --file ~/.my-credentails
+
+############################
+
+vi .my-credentails
+copy and paste the GIT hub credenatils
