@@ -1,0 +1,125 @@
+---
+- name: Upgrade Valtix Gateways
+  hosts: localhost
+  gather_facts: no
+
+  vars_prompt:
+    - name: valtix_tenant
+      prompt: "Enter Valtix Tenant Name (e.g., devcloud, qacloud)"
+      private: no
+    - name: cloud_provider
+      prompt: "Enter Cloud Provider (aws, azure, gcp)"
+      private: no
+    - name: api_url
+      prompt: "Enter API URL (e.g., https://api.valtix.com/devcloud)"
+      private: no
+    - name: api_key
+      prompt: "Enter API Key"
+      private: yes
+    - name: target_version
+      prompt: "Enter Target Upgrade Version (e.g., 24.06.02)"
+      private: no
+
+  tasks:
+
+    - name: Generate Timestamp for Inventory File
+      set_fact:
+        timestamp: "{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M-%S') }}"
+        inventory_file: "inventories/{{ timestamp }}_{{ valtix_tenant }}_{{ cloud_provider }}.yml"
+
+    - name: Authenticate with Valtix Controller
+      uri:
+        url: "{{ api_url }}/login"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          api_key: "{{ api_key }}"
+        status_code: 200
+      register: auth_response
+      no_log: true
+
+    - name: Extract Authentication Token
+      set_fact:
+        auth_token: "{{ auth_response.json.auth_token }}"
+
+    - name: Fetch Gateway IDs from Valtix
+      uri:
+        url: "{{ api_url }}/gateways?cloud={{ cloud_provider }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+        status_code: 200
+      register: gateways_response
+
+    - name: Extract Gateway IDs
+      set_fact:
+        gateway_ids: "{{ gateways_response.json.gateways | map(attribute='id') | list }}"
+
+    - name: Validate Gateway List
+      fail:
+        msg: "No gateways found for {{ valtix_tenant }} - {{ cloud_provider }}"
+      when: gateway_ids | length == 0
+
+    - name: Save Gateways to Inventory File
+      copy:
+        content: |
+          gateways:
+          {% for gw in gateway_ids %}
+            - "{{ gw }}"
+          {% endfor %}
+        dest: "{{ inventory_file }}"
+
+    - name: Fetch Current Version for Each Gateway
+      uri:
+        url: "{{ api_url }}/gateways/{{ item }}/status"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+        status_code: 200
+      register: gateway_status
+      loop: "{{ gateway_ids }}"
+      ignore_errors: yes
+
+    - name: Filter Gateways for Upgrade
+      set_fact:
+        upgrade_gateways: "{{ gateway_status.results | rejectattr('json.version', 'equalto', target_version) | map(attribute='item') | list }}"
+        skipped_gateways: "{{ gateway_status.results | selectattr('json.version', 'equalto', target_version) | map(attribute='item') | list }}"
+
+    - name: Show Skipped Gateways
+      debug:
+        msg: "⚠️ Skipping {{ item }} as it is already on version {{ target_version }}"
+      loop: "{{ skipped_gateways }}"
+      when: skipped_gateways | length > 0
+
+    - name: Upgrade Gateways that Need Upgrading
+      uri:
+        url: "{{ api_url }}/gateways/{{ item }}/upgrade"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          target_version: "{{ target_version }}"
+        status_code: [200, 202]
+      register: upgrade_results
+      loop: "{{ upgrade_gateways }}"
+      ignore_errors: yes
+
+    - name: Categorize Upgrade Results
+      set_fact:
+        success_upgrades: "{{ upgrade_results.results | selectattr('status', 'equalto', 200) | map(attribute='item') | list }}"
+        pending_upgrades: "{{ upgrade_results.results | selectattr('status', 'equalto', 202) | map(attribute='item') | list }}"
+        failed_upgrades: "{{ upgrade_results.results | rejectattr('status', 'in', [200, 202]) | map(attribute='item') | list }}"
+
+    - name: Show Upgrade Summary
+      debug:
+        msg:
+          - "✅ Successful Upgrades: {{ success_upgrades | default([]) }}"
+          - "⏳ Pending Upgrades: {{ pending_upgrades | default([]) }}"
+          - "❌ Failed Upgrades: {{ failed_upgrades | default([]) }}"
+          - "⚠️ Skipped Upgrades (Already on Target Version): {{ skipped_gateways | default([]) }}"
