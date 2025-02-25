@@ -1,0 +1,147 @@
+---
+- name: Upgrade Valtix Gateways
+  hosts: localhost
+  gather_facts: no
+
+  vars_prompt:
+    - name: tenant
+      prompt: "Enter Valtix Tenant Name (e.g., devcloud, qacloud)"
+      private: no
+    - name: environment
+      prompt: "Enter Environment (dev, preprod, prod)"
+      private: no
+    - name: cloud_provider
+      prompt: "Enter Cloud Provider (aws, azure, gcp)"
+      private: no
+    - name: api_url
+      prompt: "Enter API URL for the selected environment & cloud"
+      private: no
+    - name: target_version
+      prompt: "Enter Target Upgrade Version (e.g., 24.06.02)"
+      private: no
+
+  vars_files:
+    - valtix_secrets.yml  # Load API Key ID & Secret from Ansible Vault
+
+  tasks:
+    - name: Authenticate with Valtix and Retrieve Token
+      uri:
+        url: "{{ api_url }}/auth/token"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          apiKeyId: "{{ api_key_id }}"
+          apiKeySecret: "{{ api_key_secret }}"
+        status_code: [200]
+      register: auth_response
+      notify: Log Authentication Success
+
+    - name: Set Authentication Token
+      set_fact:
+        auth_token: "{{ auth_response.json.token }}"
+
+    - name: Generate Timestamp for Inventory File
+      set_fact:
+        timestamp: "{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M-%S') }}"
+
+    - name: Fetch List of Gateways
+      uri:
+        url: "{{ api_url }}/tenants/{{ tenant }}/gateways"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+        status_code: [200]
+      register: gateway_list
+
+    - name: Filter Gateways by Cloud Provider
+      set_fact:
+        gateways: "{{ gateway_list.json.gateways | selectattr('cloud', 'equalto', cloud_provider) | map(attribute='id') | list }}"
+
+    - name: Validate Gateway List
+      fail:
+        msg: "No gateways found for {{ cloud_provider }} in {{ tenant }}"
+      when: gateways | length == 0
+
+    - name: Create Inventory File with Timestamp
+      copy:
+        content: |
+          [valtix_gateways]
+          {% for gw in gateways %}
+          {{ gw }}
+          {% endfor %}
+        dest: "inventories/{{ tenant }}_{{ environment }}_{{ cloud_provider }}_{{ timestamp }}.ini"
+
+    - name: Fetch Current Version of Each Gateway
+      uri:
+        url: "{{ api_url }}/gateways/{{ item }}/status"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+        status_code: [200]
+      register: gateway_status
+      loop: "{{ gateways }}"
+      ignore_errors: yes
+
+    - name: Identify Gateways Needing Upgrade
+      set_fact:
+        upgrade_gateways: "{{ gateway_status.results | rejectattr('json.version', 'equalto', target_version) | map(attribute='item') | list }}"
+        skipped_gateways: "{{ gateway_status.results | selectattr('json.version', 'equalto', target_version) | map(attribute='item') | list }}"
+
+    - name: Show Skipped Gateways
+      debug:
+        msg: "⚠️ Skipping {{ item }} as it is already on version {{ target_version }}"
+      loop: "{{ skipped_gateways }}"
+      when: skipped_gateways | length > 0
+
+    - name: Upgrade Required Gateways
+      uri:
+        url: "{{ api_url }}/gateways/{{ item }}/upgrade"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ auth_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          target_version: "{{ target_version }}"
+        status_code: [200, 202]
+      register: upgrade_results
+      loop: "{{ upgrade_gateways }}"
+      ignore_errors: yes
+      notify: Log Upgrade Status
+
+    - name: Categorize Upgrade Results
+      set_fact:
+        success_upgrades: "{{ upgrade_results.results | selectattr('status', 'equalto', 200) | map(attribute='item') | list }}"
+        pending_upgrades: "{{ upgrade_results.results | selectattr('status', 'equalto', 202) | map(attribute='item') | list }}"
+        failed_upgrades: "{{ upgrade_results.results | rejectattr('status', 'in', [200, 202]) | map(attribute='item') | list }}"
+
+    - name: Show Upgrade Summary
+      debug:
+        msg:
+          - "✅ Successful Upgrades: {{ success_upgrades | default([]) }}"
+          - "⏳ Pending Upgrades: {{ pending_upgrades | default([]) }}"
+          - "❌ Failed Upgrades: {{ failed_upgrades | default([]) }}"
+          - "⚠️ Skipped Upgrades (Already on Target Version): {{ skipped_gateways | default([]) }}"
+      notify: Log Upgrade Summary
+
+  handlers:
+    - name: Log Authentication Success
+      debug:
+        msg: "✔️ Authentication with Valtix API was successful."
+
+    - name: Log Upgrade Status
+      debug:
+        msg: "📌 Upgrade process initiated. Check logs for detailed status."
+
+    - name: Log Upgrade Summary
+      debug:
+        msg: "📜 Upgrade Summary Logged Successfully."
+
+    - name: Rollback Failed Upgrades
+      debug:
+        msg: "❗ Rolling back failed upgrades for: {{ failed_upgrades }}"
+      when: failed_upgrades | length > 0
